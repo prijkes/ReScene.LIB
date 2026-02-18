@@ -422,7 +422,7 @@ public class SRSWriter
             // CRC the raw header bytes
             fs.Position = elemStart;
             byte[] rawHeader = new byte[headerSize];
-            fs.Read(rawHeader, 0, headerSize);
+            fs.ReadExactly(rawHeader, 0, headerSize);
             otherLength += headerSize;
             crc.Append(rawHeader);
 
@@ -451,7 +451,7 @@ public class SRSWriter
 
                 byte[] blockHeader = new byte[blockHeaderExtra];
                 fs.Position = dataStart;
-                fs.Read(blockHeader, 0, blockHeaderExtra);
+                fs.ReadExactly(blockHeader, 0, blockHeaderExtra);
                 otherLength += blockHeaderExtra;
                 crc.Append(blockHeader);
 
@@ -799,7 +799,7 @@ public class SRSWriter
 
         // Read fLaC marker
         byte[] marker = new byte[4];
-        fs.Read(marker, 0, 4);
+        fs.ReadExactly(marker, 0, 4);
         otherLength += 4;
         crc.Append(marker);
 
@@ -812,7 +812,7 @@ public class SRSWriter
             int blockType = typeByte & 0x7F;
 
             byte[] sizeBytes = new byte[3];
-            fs.Read(sizeBytes, 0, 3);
+            fs.ReadExactly(sizeBytes, 0, 3);
             int payloadSize = (sizeBytes[0] << 16) | (sizeBytes[1] << 8) | sizeBytes[2];
 
             byte[] blockHeader = [typeByte, sizeBytes[0], sizeBytes[1], sizeBytes[2]];
@@ -902,7 +902,7 @@ public class SRSWriter
         if (fileLen >= 10)
         {
             byte[] id3Check = new byte[10];
-            fs.Read(id3Check, 0, 10);
+            fs.ReadExactly(id3Check, 0, 10);
             fs.Position = 0;
 
             if (id3Check[0] == 'I' && id3Check[1] == 'D' && id3Check[2] == '3')
@@ -918,7 +918,7 @@ public class SRSWriter
         {
             fs.Position = fileLen - 128;
             byte[] tag = new byte[3];
-            fs.Read(tag, 0, 3);
+            fs.ReadExactly(tag, 0, 3);
             if (tag[0] == 'T' && tag[1] == 'A' && tag[2] == 'G')
             {
                 audioEnd = fileLen - 128;
@@ -1218,7 +1218,7 @@ public class SRSWriter
             // Read raw header
             inFs.Position = elemStart;
             byte[] rawHeader = new byte[headerSize];
-            inFs.Read(rawHeader, 0, headerSize);
+            inFs.ReadExactly(rawHeader, 0, headerSize);
 
             if (elemId == 0x18538067) // Segment
             {
@@ -1260,7 +1260,7 @@ public class SRSWriter
                     {
                         inFs.Position = blockParseStart;
                         byte[] blockHeader = new byte[blockHeaderExtra];
-                        inFs.Read(blockHeader, 0, blockHeaderExtra);
+                        inFs.ReadExactly(blockHeader, 0, blockHeaderExtra);
                         outFs.Write(blockHeader);
                     }
                 }
@@ -1326,7 +1326,7 @@ public class SRSWriter
             long atomStart = inFs.Position;
 
             byte[] header = new byte[8];
-            inFs.Read(header, 0, 8);
+            inFs.ReadExactly(header, 0, 8);
 
             uint size32 = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(0, 4));
             string type = Encoding.ASCII.GetString(header, 4, 4);
@@ -1338,7 +1338,7 @@ public class SRSWriter
             if (size32 == 1 && inFs.Position + 8 <= inFs.Length)
             {
                 extHeader = new byte[8];
-                inFs.Read(extHeader, 0, 8);
+                inFs.ReadExactly(extHeader, 0, 8);
                 totalSize = (long)BinaryPrimitives.ReadUInt64BigEndian(extHeader);
                 headerSize = 16;
             }
@@ -1420,7 +1420,7 @@ public class SRSWriter
             long objStart = inFs.Position;
 
             byte[] header = new byte[24];
-            inFs.Read(header, 0, 24);
+            inFs.ReadExactly(header, 0, 24);
 
             ulong objSize = BinaryPrimitives.ReadUInt64LittleEndian(header.AsSpan(16));
             if (objSize < 24) break;
@@ -1440,7 +1440,7 @@ public class SRSWriter
                 if (dataRemaining >= 26)
                 {
                     byte[] dataHeader = new byte[26];
-                    inFs.Read(dataHeader, 0, 26);
+                    inFs.ReadExactly(dataHeader, 0, 26);
                     outFs.Write(dataHeader);
 
                     ulong totalPackets = BinaryPrimitives.ReadUInt64LittleEndian(dataHeader.AsSpan(16));
@@ -1452,7 +1452,7 @@ public class SRSWriter
                         {
                             // Read packet, parse header, write only header portion
                             byte[] packet = new byte[packetSize];
-                            inFs.Read(packet, 0, packetSize);
+                            inFs.ReadExactly(packet, 0, packetSize);
 
                             // For ASF, we'd need full packet parsing to separate headers from payload
                             // pyrescene does asf_data_get_packet for this

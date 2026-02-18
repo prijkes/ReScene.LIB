@@ -453,7 +453,7 @@ public class SRRFile
 
         long pos = fs.Position;
         byte[] marker = new byte[8];
-        fs.Read(marker, 0, 8);
+        fs.ReadExactly(marker, 0, 8);
         fs.Position = pos;
 
         // RAR5 marker: Rar!\x1a\x07\x01\x00

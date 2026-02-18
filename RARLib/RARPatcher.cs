@@ -294,7 +294,7 @@ public static class RARPatcher
                 if (hasAddSize && stream.Position + 4 <= stream.Length)
                 {
                     byte[] addSizeBytes = new byte[4];
-                    stream.Read(addSizeBytes, 0, 4);
+                    stream.ReadExactly(addSizeBytes, 0, 4);
                     addSize = BitConverter.ToUInt32(addSizeBytes, 0);
                 }
 
@@ -407,7 +407,7 @@ public static class RARPatcher
                 if (hasAddSize && stream.Position + 4 <= stream.Length)
                 {
                     byte[] addSizeBytes = new byte[4];
-                    stream.Read(addSizeBytes, 0, 4);
+                    stream.ReadExactly(addSizeBytes, 0, 4);
                     addSize = BitConverter.ToUInt32(addSizeBytes, 0);
                 }
 

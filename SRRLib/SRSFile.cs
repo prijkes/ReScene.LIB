@@ -30,7 +30,7 @@ public class SRSFile
 
         // Read first 16 bytes for container detection
         byte[] magic = new byte[Math.Min(16, fs.Length)];
-        fs.Read(magic, 0, magic.Length);
+        fs.ReadExactly(magic, 0, magic.Length);
         fs.Position = 0;
 
         srs.ContainerType = DetectContainer(magic);

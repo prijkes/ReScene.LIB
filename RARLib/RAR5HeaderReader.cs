@@ -211,7 +211,7 @@ public class RAR5HeaderReader(Stream stream)
 
         long pos = stream.Position;
         byte[] marker = new byte[8];
-        stream.Read(marker, 0, 8);
+        stream.ReadExactly(marker, 0, 8);
         stream.Position = pos;
 
         for (int i = 0; i < 8; i++)
