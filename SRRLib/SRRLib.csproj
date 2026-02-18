@@ -8,7 +8,10 @@
 
   <ItemGroup>
     <PackageReference Include="System.IO.Hashing" Version="9.0.4" />
-    <ProjectReference Include="..\..\RARLib\RARLib\RARLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RARLib\RARLib.csproj" />
   </ItemGroup>
 
 </Project>
