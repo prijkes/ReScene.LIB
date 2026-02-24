@@ -554,16 +554,21 @@ public class RARDetailedParser
     private static void ParseRAR4FileHeader(BinaryReader reader, Stream stream, RARDetailedBlock block, long pos, long headerEnd, ushort flags, uint packSize)
     {
         // UNP_SIZE (4 bytes)
+        uint unpSize = 0;
         if (pos + 4 <= headerEnd)
         {
-            uint unpSize = reader.ReadUInt32();
+            unpSize = reader.ReadUInt32();
+            string? unpDesc = null;
+            if (unpSize == 0xFFFFFFFF && (flags & 0x0100) == 0) // max without LARGE flag
+                unpDesc = "Custom packer sentinel (e.g. QCF) — size unreliable";
             block.Fields.Add(new RARHeaderField
             {
                 Name = "Unpacked Size",
                 Offset = pos,
                 Length = 4,
                 RawBytes = BitConverter.GetBytes(unpSize),
-                Value = $"{unpSize:N0} bytes"
+                Value = $"{unpSize:N0} bytes",
+                Description = unpDesc
             });
             pos += 4;
         }
@@ -680,16 +685,21 @@ public class RARDetailedParser
         }
 
         // HIGH_PACK_SIZE (4 bytes) - if LARGE flag set
+        uint highPack = 0;
         if ((flags & 0x0100) != 0 && pos + 4 <= headerEnd)
         {
-            uint highPack = reader.ReadUInt32();
+            highPack = reader.ReadUInt32();
+            string? highPackDesc = null;
+            if (highPack == 0xFFFFFFFF && unpSize == 0xFFFFFFFF)
+                highPackDesc = "Custom packer sentinel (e.g. RELOADED, HI2U) — size unreliable";
             block.Fields.Add(new RARHeaderField
             {
                 Name = "High Pack Size",
                 Offset = pos,
                 Length = 4,
                 RawBytes = BitConverter.GetBytes(highPack),
-                Value = $"0x{highPack:X8}"
+                Value = $"0x{highPack:X8}",
+                Description = highPackDesc
             });
             pos += 4;
         }
@@ -698,13 +708,17 @@ public class RARDetailedParser
         if ((flags & 0x0100) != 0 && pos + 4 <= headerEnd)
         {
             uint highUnp = reader.ReadUInt32();
+            string? highUnpDesc = null;
+            if (highUnp == 0xFFFFFFFF && unpSize == 0xFFFFFFFF)
+                highUnpDesc = "Custom packer sentinel (e.g. RELOADED, HI2U) — size unreliable";
             block.Fields.Add(new RARHeaderField
             {
                 Name = "High Unpack Size",
                 Offset = pos,
                 Length = 4,
                 RawBytes = BitConverter.GetBytes(highUnp),
-                Value = $"0x{highUnp:X8}"
+                Value = $"0x{highUnp:X8}",
+                Description = highUnpDesc
             });
             pos += 4;
         }
@@ -747,18 +761,40 @@ public class RARDetailedParser
         {
             long extTimeStart = pos;
             ushort extFlags = reader.ReadUInt16();
-            block.Fields.Add(new RARHeaderField
+            var extFlagsField = new RARHeaderField
             {
                 Name = "Extended Time Flags",
                 Offset = pos,
                 Length = 2,
                 RawBytes = BitConverter.GetBytes(extFlags),
                 Value = $"0x{extFlags:X4}"
-            });
+            };
+
+            // Decode flag bits for each timestamp
+            string[] timeLabels = { "mtime", "ctime", "atime", "arctime" };
+            string[] precisionLabels = { "DOS (1s)", "+1 byte (~6.5ms)", "+2 bytes (~25.6\u00B5s)", "+3 bytes (100ns)" };
+            for (int t = 0; t < 4; t++)
+            {
+                int rmode = (extFlags >> ((3 - t) * 4)) & 0xF;
+                bool present = (rmode & 0x8) != 0;
+                bool roundUp = (rmode & 0x4) != 0;
+                int extraBytes = rmode & 0x3;
+
+                string desc = present
+                    ? $"Present, {precisionLabels[extraBytes]}{(roundUp ? ", +1s rounding" : "")}"
+                    : "Not present";
+
+                extFlagsField.Children.Add(new RARHeaderField
+                {
+                    Name = $"{timeLabels[t]} [bits {(3 - t) * 4 + 3}-{(3 - t) * 4}]",
+                    Value = $"0x{rmode:X} ({desc})"
+                });
+            }
+
+            block.Fields.Add(extFlagsField);
             pos += 2;
 
             // Parse each time field (mtime, ctime, atime, arctime)
-            string[] timeNames = { "mtime", "ctime", "atime", "arctime" };
             for (int i = 0; i < 4 && pos < headerEnd; i++)
             {
                 int rmode = (extFlags >> ((3 - i) * 4)) & 0xF;
@@ -768,13 +804,18 @@ public class RARDetailedParser
                 if (i != 0 && pos + 4 <= headerEnd)
                 {
                     uint dosTime = reader.ReadUInt32();
+                    string dosDesc = $"0x{dosTime:X8}";
+                    var dt = RARUtils.DosDateToDateTime(dosTime);
+                    if (dt.HasValue)
+                        dosDesc += $" ({dt.Value:yyyy-MM-dd HH:mm:ss})";
+
                     block.Fields.Add(new RARHeaderField
                     {
-                        Name = $"Ext {timeNames[i]} DOS",
+                        Name = $"Ext {timeLabels[i]} DOS",
                         Offset = pos,
                         Length = 4,
                         RawBytes = BitConverter.GetBytes(dosTime),
-                        Value = $"0x{dosTime:X8}"
+                        Value = dosDesc
                     });
                     pos += 4;
                 }
@@ -783,13 +824,23 @@ public class RARDetailedParser
                 if (count > 0 && pos + count <= headerEnd)
                 {
                     byte[] remainder = reader.ReadBytes(count);
+
+                    // Convert subsec bytes to 100ns ticks (same as RARHeaderReader.TryReadRemainder)
+                    int ticks = 0;
+                    for (int j = 0; j < count; j++)
+                        ticks |= remainder[j] << ((j + 3 - count) * 8);
+
+                    // Convert ticks (100ns units) to fractional seconds
+                    double seconds = ticks / 10_000_000.0;
+                    string hexStr = BitConverter.ToString(remainder).Replace("-", " ");
+
                     block.Fields.Add(new RARHeaderField
                     {
-                        Name = $"Ext {timeNames[i]} subsec",
+                        Name = $"Ext {timeLabels[i]} subsec",
                         Offset = pos,
                         Length = count,
                         RawBytes = remainder,
-                        Value = BitConverter.ToString(remainder).Replace("-", " ")
+                        Value = $"{hexStr} ({seconds:F7}s, {ticks} ticks)"
                     });
                     pos += count;
                 }
